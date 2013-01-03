@@ -1,8 +1,11 @@
 #include "argvments.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 typedef struct argm argm;
+#define argvm_handler argvm_Handler
+// too lazy to copy and replace
 
 struct argm
 {
@@ -24,7 +27,7 @@ struct argm
 };
 
 #define CLEANUP_NULLIFY_GLOBALS
-
+//#define DEBUG_TEXT
 
 
 // ####################################################
@@ -53,13 +56,20 @@ static argm* arglist_first;
 static argm* arglist_last;
 
 
+static void (*error_handler)(char*);
+
 
 
 
 // ####################################################
 
 
-
+static void default_error_handler (char* message)
+{
+	// fprintf(stderr, "\x1b[31;1m%s\x1b[0m\n", message);
+	fprintf(stderr, "%s\n", message);
+	exit(EXIT_FAILURE);
+}
 static void null_handler (char* _, int __){}
 static argm* help_arg ()
 {
@@ -79,10 +89,11 @@ static argm* help_arg ()
 	/* init happens here */
 void argvm_begin (int _argc, char** _argv)
 {
-	
-	if (argc == 0)
+	if (_argc == 0)
+	{
 		// welp, what now?
 		exit(-1);
+	}
 	
 	argc = _argc - 1;
 	argv = _argv + 1;
@@ -96,15 +107,17 @@ void argvm_begin (int _argc, char** _argv)
 	arglist_first = arglist_last = help_arg();
 	
 	usageText = versionText = NULL;
+	
+	error_handler = default_error_handler;
 }
 
 	/* Check if help text should show */
 static inline bool do_help ()
 {
-	if (no_arg_help || argc == 0) return true;
+	if (no_arg_help && argc == 0) return true;
 	int i;
 	for (i = 0; i < argc; i++)
-		if (strcmp(argv[i]) == "--help" ||
+		if (strcmp(argv[i], "--help") == 0 ||
 				(argv[i][0] == '-' && argv[i][1] == 'h'))
 			return true;
 	return false;
@@ -113,19 +126,23 @@ static inline bool do_help ()
 	/* Assign stuff */
 void argvm_usage_text (char* text)
 {
-	if (usage_text != NULL)
-		free(usage_text);
-	usage_text = strdup(text);
+	if (usageText != NULL)
+		free(usageText);
+	usageText = strdup(text);
 }
 void argvm_version_text (char* text)
 {
-	if (version_text != NULL)
-		free(version_text);
-	version_text = strdup(text);
+	if (versionText != NULL)
+		free(versionText);
+	versionText = strdup(text);
 }
 void argvm_no_arg_help (bool onoff)
 {
 	no_arg_help = onoff;
+}
+void argvm_error_handler (void (*handler)(char*))
+{
+	error_handler = handler;
 }
 
 // ---------------------------| argm 'methods' |-------------------
@@ -175,13 +192,12 @@ static inline void argm_do (argm* m, char* argument)
 }
 
 
-
-
 void argvm_basic (argvm_handler handler)
 {
-	basic_handler = handler;
+	basic.handler = handler;
 }
-void argvm_arg (char id, char* longid, bool input, argvm_handler handler, char* help)
+
+void argvm_option (char id, char* longid, bool input, argvm_handler handler, char* help)
 {
 	argm* m = malloc(sizeof(argm));
 	m->handler = handler;
@@ -208,12 +224,13 @@ void argvm_arg (char id, char* longid, bool input, argvm_handler handler, char* 
 
 static void handle_help ()
 {
+	int i;
 	argm* it;
 	if (usageText == NULL) // generate usage text if none is given 
 	{
 		// TODO:
 		// Generate text for no-flag argument handler
-		int len, i;
+		int len;
 		len = 0;
 		for (arglist_loop(it))
 			if (it->id != 0)
@@ -226,18 +243,18 @@ static void handle_help ()
 		i = 2;
 		for (arglist_loop(it))
 			if (it->id != 0)
-				usageText[i++] = id->id;
+				usageText[i++] = it->id;
 		usageText[i] = ']';
 		usageText[i + 1] = '\0';
 	}
 	
 	printf("Usage: %s %s\n", programName, usageText);
 	
-	int i, max_size, cur_size;
+	int max_size, cur_size;
 	int arglist_len = 0;
 	for (arglist_loop(it)) arglist_len++;
 	
-	char** arglist_helps = malloc(arglist_len * sizeof(char*))
+	char** arglist_helps = malloc(arglist_len * sizeof(char*));
 	
 	i = 0;
 	max_size = 12;
@@ -245,7 +262,7 @@ static void handle_help ()
 	{
 		cur_size = strlen(
 					arglist_helps[i++] = argm_helpstring(it)
-				   );
+				   ) + 4;
 		
 		if (cur_size > max_size)
 			max_size = cur_size;
@@ -261,6 +278,8 @@ static void handle_help ()
 			putchar(' ');
 		
 		printf("%s\n", it->helpText);
+		
+		i++;
 	}
 	
 		/* free stuff up */
@@ -269,8 +288,8 @@ static void handle_help ()
 	free(arglist_helps);
 	
 	
-	if (version_text != NULL)
-		printf("\n%s\n", version_text);
+	if (versionText != NULL)
+		printf("\n%s\n", versionText);
 }
 
 static void argvm_cleanup ();
@@ -281,12 +300,31 @@ static char* next_arg ()
 	if (argi == argc - 1) return "";
 	return argv[++argi];
 }
+static inline char* bool_str (bool b) { return b ? "true" : "false"; }
 
-void argvm_end ()
+#define do_basic(q) argm_do(&basic, q)
+
+
+argvm_Result argvm_end ()
 {
+#ifdef DEBUG_TEXT
+	int _options = 0; argm* __;for(arglist_loop(__)) _options++;
+	printf("\
+] no_arg_help: %s\n\
+] usageText:   %s\n\
+] versionText: %s\n\
+] # options:   %d\n\
+\n\n", bool_str(no_arg_help), usageText, versionText, _options);
+#endif
+	
+	
+	
 	if (arglist_first == NULL) { }
 	else if (do_help())
+	{
 		handle_help();
+		return ARGVM_HELP_TEXT;
+	}
 	else
 	{
 		bool found;
@@ -299,8 +337,8 @@ void argvm_end ()
 			
 			if (cur_arg[0] != '-')
 			{
-				//found = false;
-				goto not_found;
+				do_basic(cur_arg);
+				continue;
 			}
 			else if (cur_arg[1] == '-') // long id
 			{
@@ -320,12 +358,13 @@ void argvm_end ()
 			else // short id
 			{
 				len = strlen(cur_arg);
-				for (j = 1; j < len; j++)
+				for (j = 1; j < len;)
 				{
 					for (arglist_loop(it))
-						if (it->id != 0 && it->id == cur_arg[j])
+					{
+				/*	^ */if (it->id != 0 && it->id == cur_arg[j])
 						{
-				/*  ^  */	if (it->input) // -x'blah' or -x 'blah'
+				/*  ^  */	if (it->input) // takes input
 							{
 				/*  ^  */		if (cur_arg[j + 1] == '\0') // -x 'blah'
 								{
@@ -334,7 +373,7 @@ void argvm_end ()
 				/*  ^  */		else						// -x'blah'
 								{
 				/*  ^  */			argm_do(it, cur_arg + j + 1);
-									j = len;
+									j = -1;
 									// will break out of 'j < len' loop
 				/*  ^  */		}
 							}
@@ -346,17 +385,27 @@ void argvm_end ()
 							found = true;
 				/*  ^-----*/break;
 						}
+					}
+					if (j < 0) break;
+					if (it == NULL)
+					{
+						if (j == 1) j = 0; // warning: super hacky
+						do_basic(cur_arg + j);
+						found = true;
+						break;
+					}
 				}
 			}
 			
 			if (!found)
 			{
-		not_found:
-				argm_do(&basic, cur_arg);
+				do_basic(cur_arg);
 			}
 		}
 	}
 	argvm_cleanup();
+	
+	return ARGVM_SUCCESS;
 }
 
 
