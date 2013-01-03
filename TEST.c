@@ -23,13 +23,12 @@ int main (int argc, char** argv)
 {
 	argvm_begin(argc, argv);
 	
-	argvm_no_arg_help(false);
-	argvm_usage_text("[TEXT..]");
+	argvm_no_arg_help(true);
 	argvm_version_text("Version 1.0");
 	
-	argvm_basic(option_arg);
-	argvm_option('l', "lower", false, option_nocaps, "Make text lowercase");
+	argvm_basic(option_arg, "TEXT...");
 	argvm_option('u', "upper", false, option_caps,   "Make text uppercase");
+	argvm_option(0,   "lower", false, option_nocaps, "Make text lowercase");
 	
 	if (argvm_end() != ARGVM_HELP_TEXT)
 		putchar('\n');
