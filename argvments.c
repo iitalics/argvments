@@ -276,12 +276,10 @@ static void handle_help ()
 		
 		printf("%s\n", it->helpText);
 		
-		i++;
+		free(arglist_helps[i++]);
 	}
 	
-		/* free stuff up */
-	for (i = 0; i < arglist_len; i++)
-		free(arglist_helps[i]);
+	
 	free(arglist_helps);
 	
 	
