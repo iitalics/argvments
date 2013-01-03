@@ -172,7 +172,7 @@ static char* argm_helpstring (argm* arg)
 	if (arg->longid)
 	{
 		if (i > 0)
-			strcpy(buffer + 2, "  --");
+			strcpy(buffer + 2, ", --");
 		else
 			buffer[0] = buffer[1] = '-'; /* alternatively: strcpy(buffer, "--"); */
 			
