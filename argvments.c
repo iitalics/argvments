@@ -4,8 +4,6 @@
 #include <string.h>
 
 typedef struct argm argm;
-#define argvm_handler argvm_Handler
-// too lazy to copy and replace
 
 struct argm
 {
@@ -18,7 +16,7 @@ struct argm
 		/* whether argument takes input (e.g. in gcc, -c  VS  -o) */
 	bool input;
 		/* function pointer to handler to... handle it */
-	argvm_handler handler;
+	argvm_Handler handler;
 		/* help text, for -h or --help options */
 	char* helpText;
 	
@@ -192,12 +190,13 @@ static inline void argm_do (argm* m, char* argument)
 }
 
 
-void argvm_basic (argvm_handler handler)
+void argvm_basic (argvm_Handler handler, char* help)
 {
 	basic.handler = handler;
+	basic.helpText = help;
 }
 
-void argvm_option (char id, char* longid, bool input, argvm_handler handler, char* help)
+void argvm_option (char id, char* longid, bool input, argvm_Handler handler, char* help)
 {
 	argm* m = malloc(sizeof(argm));
 	m->handler = handler;
@@ -228,8 +227,6 @@ static void handle_help ()
 	argm* it;
 	if (usageText == NULL) // generate usage text if none is given 
 	{
-		// TODO:
-		// Generate text for no-flag argument handler
 		int len;
 		len = 0;
 		for (arglist_loop(it))
@@ -248,7 +245,7 @@ static void handle_help ()
 		usageText[i + 1] = '\0';
 	}
 	
-	printf("Usage: %s %s\n", programName, usageText);
+	printf("Usage: %s %s %s\n", programName, usageText, basic.helpText == NULL ? "" : basic.helpText);
 	
 	int max_size, cur_size;
 	int arglist_len = 0;

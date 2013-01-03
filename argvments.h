@@ -14,7 +14,7 @@ typedef enum
 
 extern void argvm_begin (int argc, char** argv);
 
-extern void argvm_basic (argvm_Handler handler);
+extern void argvm_basic (argvm_Handler handler, char* help);
 extern void argvm_option (char shortName, char* longNameOrNull, bool takesInput, argvm_Handler handler, char* help);
 extern void argvm_no_arg_help (bool onoff);
 
